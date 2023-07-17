@@ -1,1 +1,1 @@
-# ShardKV
+This hub contains four labs in MIT 6.824. The key lab implements a key/value storage system that shards the keys over a set of replica groups, moreover, how the entire system is sharded is scheduled by a single 'Master', and the system can migrate shards and collect garbage according to changes in configure.
