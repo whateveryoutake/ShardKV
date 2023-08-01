@@ -28,4 +28,32 @@ peer收到candidate的投票请求。
 由leader调用，如果nextIndex[id] < rf.LastIncludedIndex + 1,说明nextIndex数组没有及时更新，该方法会更新peer对应的lastIncludedIndex和lastIncludedTerm、lastApplied  
 删除lastIncluedIndex之前的日志
 ### lab3 KVRaft
-构建了一个基于Raft的kv存储系统，客户会对服务器发出请求，通过raft达成共识后会返回给用户对应的结果，主要支持的操作有Get、Put以及Append操作
+构建了一个基于Raft的kv存储系统，客户会对服务器发出RPC请求，通过raft达成共识后会返回给用户对应的结果，主要支持的操作有Get(获取键值)、Put(替换键值)以及Append操作(追加键值)  
+Client的结构定义
+```
+type Clerk struct {
+	servers []*labrpc.ClientEnd
+	// You will have to modify this struct.  
+	lastLeader int        //上一个联络的leader  
+	seqNumber  int64      //执行命令的编号  
+	id         int64      //客户的编号  
+	mu         sync.Mutex //互斥锁  
+}
+```
+server中重要方法
+#### Get()及PutAppend()
+Client发出请求后调用RPC，服务器会调用某个服务器中对应的方法  
+判断服务器是否为leader同时取出对应客户Id的序列号判断是否有效(>=args中序列号，说明该操作已被处理)  
+封装op,调用kv.rf.start(op)加入日志，在对应index(lastLogIndex+1)处创建队列并监听（监听成功更新reply），超时返回ErrWrongLeader，更新reply的值
+#### processLog()
+服务器启动后便会启动go routine轮询  
+从消息队列取出消息（来源于raft）  
+来自applyLog()  
+若操作有效(序列号大于客户当前序列号)，根据操作类型对本地db进行操作，更新客户对应的序列号  
+取出对应index处的消息队列，将op放入
+来自installSnapshot()  
+对lastApplied更新
+#### doSnapshot()
+服务器启动后便会启动go routine轮询  
+当stateSize超过最大值，调用raft中GenerateSnapshot生成快照
+
