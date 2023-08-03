@@ -57,4 +57,77 @@ Client发出请求后调用RPC，服务器会调用某个服务器中对应的�
 ### doSnapshot()
 服务器启动后便会启动go routine轮询  
 当stateSize超过最大值，调用raft中GenerateSnapshot生成快照
+## lab4 ShardKV
+在lab2和lab3的基础上继续构建支持分片的KV存储系统，分片是键/值对的子集;例如，所有以“a”开头的键可能是一个分片，所有以“b”开头的键可能是另一个分片。  
+分片的优势在于提高性能：每个复制组只处理几个分片的put和get操作，并且这些组并行操作，组与组之间互不干扰;因此，总系统吞吐量(单位时间内的输入和获取)与组的数量成比例地增加。  
+该系统主要由两部分组成： 
+* 一系列复制组
+每个复制组负责一组分片，由几个服务器组成，这些服务器使用Raft来复制组间的分片。
+* shard master
+决定哪个复制组应该服务于每个shard;这些信息称为配置。配置随着时间的推移而变化。客户端通过查询分片主服务器来查找对应密钥的复制组，而复制组通过查询分片主服务器来查找需要服务的分片。整个系统只有一个shardMaster，使用Raft作为容错服务实现。
+### Shard Master主要RPC
+#### Join(servers map[int][] string)
+参数是一组映射，从gid到服务器名称列表，功能是创建一个包含新复制组的新配置来做出反应，新的配置应该在组集合中尽可能均匀地划分分片（尽可能少的移动）
+#### Query(num int)
+输入一个configuration num, shard master返回对应的配置config, 如果num为-1或者大于已知最新配置的num，返回最新的配置
+#### Leave(gid []int)
+参数是先前加入的gid列表，shard master会将这些gid从配置组中删除，并将这些组中分片分给其他组（保证尽可能均匀，且移动较少）
+#### Move(shard int, gid int)
+参数是一个分片号和一个gid, shard master将该分片移到该组
+### server中主要函数
+ShardKV结构
+```
+type ShardKV struct {
+	mu           sync.Mutex
+	me           int
+	rf           *raft.Raft
+	applyCh      chan raft.ApplyMsg
+	make_end     func(string) *labrpc.ClientEnd
+	gid          int
+	masters      []*labrpc.ClientEnd
+	maxraftstate int // snapshot if log grows this big
+
+	// Your definitions here.
+	dead        int32
+	lastApplied int
+	db          [shardmaster.NShards]map[string]string
+	// Key: index Value: op
+	channels map[int]chan Op
+	// clients sequence number
+	clients   [shardmaster.NShards]map[int64]int64
+	configs   []shardmaster.Config
+	oldConfig shardmaster.Config
+	pdclient  *shardmaster.Clerk
+
+	availableShards map[int]bool
+	oldshards       map[int]map[int]bool
+
+	requiredShards map[int]bool
+	// config id -> shard id -> data
+	oldshardsData map[int]map[int]map[string]string
+	// config id -> shard id -> seq
+	oldshardsSeq map[int]map[int]map[int64]int64
+	// config id -> shard id
+	garbageList map[int]map[int]bool
+}
+```
+Op结构，会放入raft的日志中
+```
+type Op struct {
+	// Your definitions here.
+	// Field names must start with capital letters,
+	// otherwise RPC will break.
+	OpType         KvOp
+	Key            string
+	Value          string
+	Id             int64
+	SeqNum         int64
+	Err            Err
+	ConfigNumber   int
+	MigrationReply GetMigrationReply
+	Config         shardmaster.Config
+	GCNum          int
+	GCShard        int
+}
+```
 
