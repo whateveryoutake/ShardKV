@@ -75,7 +75,7 @@ Client发出请求后调用RPC，服务器会调用某个服务器中对应的�
 #### Move(shard int, gid int)
 参数是一个分片号和一个gid, shard master将该分片移到该组
 ### server中主要函数
-ShardKV结构
+#### ShardKV结构
 ```
 type ShardKV struct {
 	mu           sync.Mutex
@@ -111,23 +111,42 @@ type ShardKV struct {
 	garbageList map[int]map[int]bool
 }
 ```
-Op结构，会放入raft的日志中
+#### Op结构，会放入raft的日志中
 ```
 type Op struct {
-	// Your definitions here.
-	// Field names must start with capital letters,
-	// otherwise RPC will break.
-	OpType         KvOp
-	Key            string
-	Value          string
-	Id             int64
-	SeqNum         int64
-	Err            Err
-	ConfigNumber   int
-	MigrationReply GetMigrationReply
-	Config         shardmaster.Config
-	GCNum          int
-	GCShard        int
+	// Your data here.
+	Type OpType
+	// Join
+	JoinServers map[int][]string
+	// Leave
+	LeaveGIDs []int
+	// Move
+	MoveShard int
+	MoveGID   int
+	// Query
+	QueryNum    int
+	QueryConfig Config
+
+	ClientID int64
+	SeqNum   int64
 }
 ```
+#### rebalance函数，将config重新均匀分配
+```
+func (sm *ShardMaster) rebalance(config *Config) {
+	gidArray := make([]int, 0)
+	//根据config初始化gidArray
+	for k, _ := range config.Groups {
+		gidArray = append(gidArray, k)
+	}
+	sort.Ints(gidArray)
+	if len(gidArray) > 0 {
+		for i := 0; i < NShards; i++ {
+			config.Shards[i] = gidArray[i%len(gidArray)]
+		}
+	} else {
+		config.Shards = [NShards]int{}
+	}
 
+}
+```
