@@ -1,5 +1,5 @@
 ## Preview
-该项目实现了MIT 6.824(2020)中的四个lab，包括一些Chanllenge的部分，其中服务器之间通过RPC进行通信，lab2-lab4是一个层层递进的关系
+该项目实现了MIT 6.824(2020)中的四个lab，通过了所有测试用例，包括一些Chanllenge的部分，其中服务器之间通过RPC进行通信，lab2-lab4是一个层层递进的关系
 ## lab1 MapReduce
 有多台服务器，其中一台作为server负责任务的分发以及失效worker的处理，其余都作为worker来调用Map和Reduce函数处理读写文件。  
 注意：  
