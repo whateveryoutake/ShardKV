@@ -42,7 +42,7 @@ type Clerk struct {
 	mu         sync.Mutex //互斥锁  
 }
 ```
-server中重要方法
+### server中重要方法
 ### Get()及PutAppend()
 Client发出请求后调用RPC，服务器会调用某个服务器中对应的方法  
 判断服务器是否为leader同时取出对应客户Id的序列号判断是否有效(>=args中序列号，说明该操作已被处理)  
@@ -67,16 +67,16 @@ Client发出请求后调用RPC，服务器会调用某个服务器中对应的�
 * shard master
 决定哪个复制组应该服务于哪个shard;这些信息称为配置。配置随着时间的推移而变化。客户端通过查询shard master来查找对应key的复制组，而复制组通过查询shard master来查找需要服务的分片。整个系统只有一个shardMaster，使用Raft作为容错服务实现。
 ### Shard Master中client的主要RPC
-#### Join(servers map[int][] string)
+### Join(servers map[int][] string)
 参数是一组映射，从gid到服务器名称列表，功能是创建一个包含新复制组的新配置来做出反应，新的配置应该在组集合中尽可能均匀地划分分片（尽可能少的移动）
-#### Query(num int)
+### Query(num int)
 输入一个configuration num, shard master返回对应的配置config, 如果num为-1或者大于已知最新配置的num，返回最新的配置
-#### Leave(gid []int)
+### Leave(gid []int)
 参数是先前加入的gid列表，shard master会将这些gid从配置组中删除，并将这些组中分片分给其他组（保证尽可能均匀，且移动较少）
-#### Move(shard int, gid int)
+### Move(shard int, gid int)
 参数是一个分片号和一个gid, shard master将该分片移到该组
 ### Server中主要函数
-#### ShardKV结构
+### ShardKV结构
 ```
 type ShardMaster struct {
 	mu      sync.Mutex
@@ -93,7 +93,7 @@ type ShardMaster struct {
 	channels map[int]chan Op
 }
 ```
-#### Op结构，会放入raft的日志中
+### Op结构，会放入raft的日志中
 ```
 type Op struct {
 	// Your data here.
@@ -113,7 +113,7 @@ type Op struct {
 	SeqNum   int64
 }
 ```
-#### Config结构
+### Config结构
 ```
 type Config struct {
 	Num    int              // config number
@@ -121,7 +121,7 @@ type Config struct {
 	Groups map[int][]string // gid -> servers[]
 }
 ```
-#### rebalance函数，将config重新均匀分配
+### rebalance函数，将config重新均匀分配
 ```
 func (sm *ShardMaster) rebalance(config *Config) {
 	gidArray := make([]int, 0)
@@ -140,7 +140,7 @@ func (sm *ShardMaster) rebalance(config *Config) {
 
 }
 ```
-#### handleJoinOp 
+### handleJoinOp 
 还原最新config中的group,加入op中JoinServers，rebalance，加入新配置
 ```
 func (sm *ShardMaster) handleJoinOp(op *Op) {
@@ -166,7 +166,7 @@ func (sm *ShardMaster) handleJoinOp(op *Op) {
 	// new shard info
 }
 ```
-#### handleLeaveOp
+### handleLeaveOp
 还原最新config中的group，删除op中LeaveGids，rebalance，加入新配置
 ```
 func (sm *ShardMaster) handleLeaveOp(op *Op) {
@@ -188,7 +188,7 @@ func (sm *ShardMaster) handleLeaveOp(op *Op) {
 	sm.configs = append(sm.configs, config)
 }
 ```
-#### handleMoveOp
+### handleMoveOp
 还原最新config中的groups和shards，把对应gid移到对应shard中，加入新配置
 ```
 func (sm *ShardMaster) handleMoveOp(op *Op) {
@@ -210,7 +210,7 @@ func (sm *ShardMaster) handleMoveOp(op *Op) {
 	sm.configs = append(sm.configs, config)
 }
 ```
-#### handleQueryOp
+### handleQueryOp
 根据传入num返回对应的config
 ```
 func (sm *ShardMaster) handleQueryOp(op *Op) {
@@ -227,11 +227,11 @@ func (sm *ShardMaster) handleQueryOp(op *Op) {
 
 }
 ```
-#### client调用的rpc(Join/Query/Move/Leave等)
+### client调用的rpc(Join/Query/Move/Leave等)
 大致流程都相似  
 上锁，判断当前服务器是否为leader并且操作已经被处理，设置reply的Err和WrongLeader，解锁  
 封装op，调用rf.start放入raft的日志中，在对应Index处建立队列，并对其进行监听（超时WrongLeader，监听成功更新reply），上锁删除对应index处的队列
-#### applyLog
+### applyLog
 启动服务器后会启动go routine轮询  
 取出消息队列中的消息（来自raft,说明已经应用于状态机），上锁，若对应client序列号还未应用，根据op类型进行操作,更新clients的序列号，将op放入index对应的channel，解锁
 ```
@@ -329,11 +329,11 @@ type ShardKV struct {
 	garbageList map[int]map[int]bool
 }
 ```
-#### 调用的RPC（Get/Put/Append）
+### 调用的RPC（Get/Put/Append）
 大致与lab3相同，有几点注意  
 保证num与最新的config相同（config未发生变化），并且对应的shard是可用的
 函数中带有go的表示从服务器开始便启动go routine进行轮询的函数
-#### pullConfig() go
+### pullConfig() go
 由leader调用，当出现新的config且requiredShards为空时    
 封装op（类型为config），调用rf.start放入raft的日志中
 ```
@@ -360,7 +360,7 @@ func (kv *ShardKV) pullConfig() {
 	}
 }
 ```
-#### pullShards() go
+### pullShards() go
 由leader调用，当requiredShards不为空时调用  
 初始化neededShards和oldConfig，设置一组信号量waitGroup  
 遍历neededShards go func(shard),取出oldConfig对应shard中的gid和groups  
@@ -422,7 +422,7 @@ func (kv *ShardKV) pullShards() {
 	fmt.Println("Thread killed")
 }
 ```
-#### GetMigration
+### GetMigration
 ```
 func (kv *ShardKV) GetMigration(args *GetMigrationArgs, reply *GetMigrationReply) {
 	kv.mu.Lock()
@@ -451,30 +451,30 @@ func (kv *ShardKV) GetMigration(args *GetMigrationArgs, reply *GetMigrationReply
 
 }
 ```
-#### doSnapshot() go
+### doSnapshot() go
 超过最大size则生成快照
-#### processLog() go
+### processLog() go
 取出消息队列中的消息，
 msg为Valid(由rf.applyLog产生)，根据op类型进行相应处理  
 applyConfig()/applyMigration()/applyGarbageCollection()/applyUserRequest()
 不为valid(由installSnapshot产生)，若msg.LastIncludedIndex > kv.lastApplied，调用applySnapshot，更新lastApplied
-#### sendGCRequest() go
+### sendGCRequest() go
 把garbageList封装成args(num, shard)组成的list，定义信号量（len(list))  
 对于每个args，获取gid和groups,对于groups中的每个server,调用ShardKV.GarbageCollectionRPC，  
 调用成功，若返回Ok则删除对应garbageList中shard,否则若为deleting直接break
-#### GarbageCollectionRPC(args, reply)
+### GarbageCollectionRPC(args, reply)
 若oldConfig中没有相关num和shard的信息，返回ok(无需删除)  
 封装op,放入raft日志中，若为leader返回deleting,否则返回ErrWrongLeader
-#### applyUserRequest(op *Op, msg *raft.ApplyMsg)
+### applyUserRequest(op *Op, msg *raft.ApplyMsg)
 整个过程上锁
 根据key值找到hashval(对应shard的id)  
 对应分片不可用或者不是最新config，返回ErrWrongGroup(op.Err)  
 进一步取出序列号seq，保证op序列号>seq（还未应用），根据Get/Put/Append对db进行操作，更新seq以及lastApplied,将op放入对应index的channel中
-#### applyGarbageCollection(op *Op, msg *raft.ApplyMsg)
+### applyGarbageCollection(op *Op, msg *raft.ApplyMsg)
 如果没有op中GCNum和GCShard对应的信息，不作操作  
 否则删除oldshards/oldshardsData/oldshardsSeq中对应GCNum中GCShard对应的数据
 最后更新lastApplied
-#### applyMigration(op *Op, msg *raft.ApplyMsg)
+### applyMigration(op *Op, msg *raft.ApplyMsg)
 op中num与olcConfig的相同，  
 将op中shard从requiredShards删除，availableShards中变为True,db中对应Shardf更改为op中Data  
 对于op中每个seq,取最大值
@@ -490,7 +490,7 @@ op中num与olcConfig的相同，
 ```
 更新lastApplied
 garbageList[Num][shard]设为True，表示需要回收
-#### applyConfig(op *Op, msg *raft.ApplyMsg)
+### applyConfig(op *Op, msg *raft.ApplyMsg)
 整个过程上锁
 当出现新的config且requiredShards为空时  
 如果是第一个config,更新oldConfig和newConfig，若kv.gid和newConfig中shard对应的id相等，设置其availableShards为True  
