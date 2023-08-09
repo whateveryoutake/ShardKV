@@ -4,7 +4,8 @@
 有多台服务器，其中一台作为server负责任务的分发以及失效worker的处理，其余都作为worker来调用Map和Reduce函数处理读写文件。  
 注意：  
 如果worker没有在合理的时间内完成任务(10s)，master应该将任务交给另一个worker来处理；  
-worker应该将Map输出的intermediate放在当前目录下的文件中，稍后worker可以将其作为Reduce任务的输入读取
+worker应该将Map输出的intermediate放在当前目录下的文件中，稍后worker可以将其作为Reduce任务的输入读取  
+实现退出的方法，当reduce任务都结束时，master进入Exit状态，创建一个exit状态的任务加入任务队列，worker取出任务，当任务状态为exit直接退出。
 
 ## lab2 Raft
 raft是一个分布式系统的一致性协议，同时还有一定程度的容错  
